@@ -3,9 +3,9 @@ from typing import Annotated, List
 
 import PIL
 import requests
-from marker.logger import get_logger
 from pydantic import BaseModel
 
+from marker.logger import get_logger
 from marker.schema.blocks import Block
 from marker.services import BaseService
 
@@ -19,6 +19,7 @@ class OllamaService(BaseService):
     ollama_model: Annotated[str, "The model name to use for ollama."] = (
         "llama3.2-vision"
     )
+    ollama_auth_header: Annotated[str, "The auth header to use for ollama."] = ""
 
     def process_images(self, images):
         image_bytes = [self.img_to_base64(img) for img in images]
@@ -36,6 +37,8 @@ class OllamaService(BaseService):
         url = f"{self.ollama_base_url}/api/generate"
         headers = {"Content-Type": "application/json"}
 
+        if self.ollama_auth_header:
+            headers["Authorization"] = self.ollama_auth_header
         schema = response_schema.model_json_schema()
         format_schema = {
             "type": "object",

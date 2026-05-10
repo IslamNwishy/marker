@@ -1,22 +1,20 @@
+import base64
+import io
+import os
 import traceback
+from contextlib import asynccontextmanager
+from typing import Annotated, Literal, Optional
 
 import click
-import os
-
+from fastapi import FastAPI, File, Form, UploadFile
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 from starlette.responses import HTMLResponse
 
 from marker.config.parser import ConfigParser
-from marker.output import text_from_rendered
-
-import base64
-from contextlib import asynccontextmanager
-from typing import Optional, Annotated
-import io
-
-from fastapi import FastAPI, Form, File, UploadFile
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
+from marker.output import text_from_rendered
 from marker.settings import settings
 
 app_data = {}
@@ -52,6 +50,38 @@ async def root():
     )
 
 
+LLM_SERVICE_MAP = {
+    "gemini": "marker.services.gemini.GoogleGeminiService",
+    "vertex": "marker.services.vertex.GoogleVertexService",
+    "ollama": "marker.services.ollama.OllamaService",
+    "claude": "marker.services.claude.ClaudeService",
+    "openai": "marker.services.openai.OpenAIService",
+    "azure_openai": "marker.services.azure_openai.AzureOpenAIService",
+}
+
+LLM_SERVICE_OPTIONS = list(LLM_SERVICE_MAP.keys())
+
+
+EXTRA_LLM_PARAMS_MAP = {
+    "gemini": [("api_key", "gemini_api_key")],
+    "vertex": [
+        ("api_key", "vertex_project_id"),
+    ],
+    "ollama": [
+        ("base_url", "ollama_base_url"),
+        ("model", "ollama_model"),
+        ("auth_header", "ollama_auth_header"),
+    ],
+    "claude": [("api_key", "claude_api_key"), ("model", "claude_model_name")],
+    "openai": [("api_key", "openai_api_key"), ("model", "openai_model")],
+    "azure_openai": [
+        ("api_key", "azure_api_key"),
+        ("base_url", "azure_endpoint"),
+        ("model", "deployment_name"),
+    ],
+}
+
+
 class CommonParams(BaseModel):
     filepath: Annotated[
         Optional[str], Field(description="The path to the PDF file to convert.")
@@ -81,6 +111,32 @@ class CommonParams(BaseModel):
             description="The format to output the text in.  Can be 'markdown', 'json', or 'html'.  Defaults to 'markdown'."
         ),
     ] = "markdown"
+    use_llm: bool = Field(default=False, description="Use llm")
+    llm_service: Annotated[
+        str,
+        Field(
+            description=f"The LLM service to use.  Must be one of {list(LLM_SERVICE_MAP.keys())}."
+        ),
+    ] = "ollama"
+    base_url: Annotated[Optional[str], Field(description="The base URL to use.")] = None
+    api_key: Annotated[Optional[str], Field(description="The API key to use.")] = None
+    model: Annotated[Optional[str], Field(description="The model to use.")] = None
+    auth_header: Annotated[
+        Optional[str], Field(description="The auth header to use.")
+    ] = None
+
+    gemini_api_key: SkipJsonSchema[Optional[str]] = None
+    vertex_project_id: SkipJsonSchema[Optional[str]] = None
+    ollama_base_url: SkipJsonSchema[Optional[str]] = None
+    ollama_model: SkipJsonSchema[Optional[str]] = None
+    ollama_auth_header: SkipJsonSchema[Optional[str]] = None
+    claude_api_key: SkipJsonSchema[Optional[str]] = None
+    claude_model_name: SkipJsonSchema[Optional[str]] = None
+    openai_api_key: SkipJsonSchema[Optional[str]] = None
+    openai_model: SkipJsonSchema[Optional[str]] = None
+    azure_api_key: SkipJsonSchema[Optional[str]] = None
+    azure_endpoint: SkipJsonSchema[Optional[str]] = None
+    deployment_name: SkipJsonSchema[Optional[str]] = None
 
 
 async def _convert_pdf(params: CommonParams):
@@ -141,6 +197,11 @@ async def convert_pdf_upload(
     file: UploadFile = File(
         ..., description="The PDF file to convert.", media_type="application/pdf"
     ),
+    llm_service: Optional[Literal[LLM_SERVICE_OPTIONS]] = Form(default=None),  # ty:ignore[invalid-type-form]
+    base_url: Optional[str] = Form(default=None),
+    api_key: Optional[str] = Form(default=None),
+    model: Optional[str] = Form(default=None),
+    auth_header: Optional[str] = Form(default=None),
 ):
     upload_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
     with open(upload_path, "wb+") as upload_file:
@@ -153,7 +214,21 @@ async def convert_pdf_upload(
         force_ocr=force_ocr,
         paginate_output=paginate_output,
         output_format=output_format,
+        llm_service=llm_service,
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        auth_header=auth_header,
     )
+    # Get the extra LLM params from the extra LLM params map
+    llm_service = params.llm_service
+    if llm_service in LLM_SERVICE_MAP:
+        for param_name, param_value in EXTRA_LLM_PARAMS_MAP.get(llm_service, []):
+            setattr(params, param_value, getattr(params, param_name, None))
+
+        params.use_llm = True
+        params.llm_service = LLM_SERVICE_MAP[llm_service]
+
     results = await _convert_pdf(params)
     os.remove(upload_path)
     return results
