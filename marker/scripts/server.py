@@ -197,7 +197,7 @@ async def convert_pdf_upload(
     file: UploadFile = File(
         ..., description="The PDF file to convert.", media_type="application/pdf"
     ),
-    llm_service: Optional[Literal[LLM_SERVICE_OPTIONS]] = Form(default=None),  # ty:ignore[invalid-type-form]
+    llm_service: Optional[Literal[*LLM_SERVICE_OPTIONS]] = Form(default=None),  # ty:ignore[invalid-type-form]
     base_url: Optional[str] = Form(default=None),
     api_key: Optional[str] = Form(default=None),
     model: Optional[str] = Form(default=None),
