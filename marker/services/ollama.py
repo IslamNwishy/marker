@@ -13,12 +13,8 @@ logger = get_logger()
 
 
 class OllamaService(BaseService):
-    ollama_base_url: Annotated[
-        str, "The base url to use for ollama.  No trailing slash."
-    ] = "http://localhost:11434"
-    ollama_model: Annotated[str, "The model name to use for ollama."] = (
-        "llama3.2-vision"
-    )
+    ollama_base_url: Annotated[str, "The base url to use for ollama.  No trailing slash."] = "http://localhost:11434"
+    ollama_model: Annotated[str, "The model name to use for ollama."] = "llama3.2-vision"
     ollama_auth_header: Annotated[str, "The auth header to use for ollama."] = ""
 
     def process_images(self, images):
@@ -39,12 +35,12 @@ class OllamaService(BaseService):
 
         if self.ollama_auth_header:
             headers["Authorization"] = self.ollama_auth_header
-        schema = response_schema.model_json_schema()
-        format_schema = {
-            "type": "object",
-            "properties": schema["properties"],
-            "required": schema["required"],
-        }
+        # schema =
+        # format_schema = {
+        #     "type": "object",
+        #     "properties": schema["properties"],
+        #     "required": schema["required"],
+        # }
 
         image_bytes = self.format_image_for_llm(image)
 
@@ -52,7 +48,7 @@ class OllamaService(BaseService):
             "model": self.ollama_model,
             "prompt": prompt,
             "stream": False,
-            "format": format_schema,
+            "format": response_schema.model_json_schema(),
             "images": image_bytes,
         }
 
@@ -61,9 +57,7 @@ class OllamaService(BaseService):
             response.raise_for_status()
             response_data = response.json()
 
-            total_tokens = (
-                response_data["prompt_eval_count"] + response_data["eval_count"]
-            )
+            total_tokens = response_data.get("prompt_eval_count", 0) + response_data.get("eval_count", 0)
 
             if block:
                 block.update_metadata(llm_request_count=1, llm_tokens_used=total_tokens)
