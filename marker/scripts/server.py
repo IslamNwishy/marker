@@ -83,9 +83,7 @@ EXTRA_LLM_PARAMS_MAP = {
 
 
 class CommonParams(BaseModel):
-    filepath: Annotated[
-        Optional[str], Field(description="The path to the PDF file to convert.")
-    ]
+    filepath: Annotated[Optional[str], Field(description="The path to the PDF file to convert.")]
     page_range: Annotated[
         Optional[str],
         Field(
@@ -113,17 +111,13 @@ class CommonParams(BaseModel):
     ] = "markdown"
     use_llm: bool = Field(default=False, description="Use llm")
     llm_service: Annotated[
-        str,
-        Field(
-            description=f"The LLM service to use.  Must be one of {list(LLM_SERVICE_MAP.keys())}."
-        ),
-    ] = "ollama"
+        Optional[str],
+        Field(description=f"The LLM service to use.  Must be one of {list(LLM_SERVICE_MAP.keys())}."),
+    ] = None
     base_url: Annotated[Optional[str], Field(description="The base URL to use.")] = None
     api_key: Annotated[Optional[str], Field(description="The API key to use.")] = None
     model: Annotated[Optional[str], Field(description="The model to use.")] = None
-    auth_header: Annotated[
-        Optional[str], Field(description="The auth header to use.")
-    ] = None
+    auth_header: Annotated[Optional[str], Field(description="The auth header to use.")] = None
 
     gemini_api_key: SkipJsonSchema[Optional[str]] = None
     vertex_project_id: SkipJsonSchema[Optional[str]] = None
@@ -140,9 +134,7 @@ class CommonParams(BaseModel):
 
 
 async def _convert_pdf(params: CommonParams):
-    assert params.output_format in ["markdown", "json", "html", "chunks"], (
-        "Invalid output format"
-    )
+    assert params.output_format in ["markdown", "json", "html", "chunks"], "Invalid output format"
     try:
         options = params.model_dump()
         config_parser = ConfigParser(options)
@@ -170,9 +162,7 @@ async def _convert_pdf(params: CommonParams):
     for k, v in images.items():
         byte_stream = io.BytesIO()
         v.save(byte_stream, format=settings.OUTPUT_IMAGE_FORMAT)
-        encoded[k] = base64.b64encode(byte_stream.getvalue()).decode(
-            settings.OUTPUT_ENCODING
-        )
+        encoded[k] = base64.b64encode(byte_stream.getvalue()).decode(settings.OUTPUT_ENCODING)
 
     return {
         "format": params.output_format,
@@ -194,9 +184,7 @@ async def convert_pdf_upload(
     force_ocr: Optional[bool] = Form(default=False),
     paginate_output: Optional[bool] = Form(default=False),
     output_format: Optional[str] = Form(default="markdown"),
-    file: UploadFile = File(
-        ..., description="The PDF file to convert.", media_type="application/pdf"
-    ),
+    file: UploadFile = File(..., description="The PDF file to convert.", media_type="application/pdf"),
     llm_service: Optional[Literal[*LLM_SERVICE_OPTIONS]] = Form(default=None),  # ty:ignore[invalid-type-form]
     base_url: Optional[str] = Form(default=None),
     api_key: Optional[str] = Form(default=None),
